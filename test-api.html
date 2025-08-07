@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #0078d7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #005fa3;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { border-color: #28a745; background: #d4edda; }
+        .error { border-color: #dc3545; background: #f8d7da; }
+        .info { border-color: #17a2b8; background: #d1ecf1; }
+    </style>
+</head>
+<body>
+    <h1>🔍 API Connection Test Tool</h1>
+    
+    <div class="test-section">
+        <h2>Configuration</h2>
+        <p><strong>Backend URL:</strong> <span id="backend-url">Loading...</span></p>
+        <p><strong>Products Endpoint:</strong> <span id="products-endpoint">Loading...</span></p>
+        <p><strong>Orders Endpoint:</strong> <span id="orders-endpoint">Loading...</span></p>
+    </div>
+
+    <div class="test-section">
+        <h2>Basic Connectivity Tests</h2>
+        <button class="test-button" onclick="testBasicConnection()">Test Basic Connection</button>
+        <button class="test-button" onclick="testProductsEndpoint()">Test Products Endpoint</button>
+        <button class="test-button" onclick="testOrdersEndpoint()">Test Orders Endpoint</button>
+        <button class="test-button" onclick="testCORS()">Test CORS</button>
+        <div id="basic-results" class="result info">Click a test button to start...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Supabase Specific Tests</h2>
+        <button class="test-button" onclick="testSupabaseConnection()">Test Supabase Connection</button>
+        <button class="test-button" onclick="testSupabaseAuth()">Test Supabase Auth</button>
+        <div id="supabase-results" class="result info">Click a test button to start...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 Lovable Backend Configuration</h2>
+        <p><strong>Current Backend URL:</strong> <code>https://shop-flow-ctrl.lovable.app</code></p>
+        
+        <h3>Required Backend Setup:</h3>
+        <ol>
+            <li><strong>CORS Configuration:</strong> Your backend must allow requests from your frontend domain</li>
+            <li><strong>API Endpoints:</strong> Ensure these endpoints exist on your backend:
+                <ul>
+                    <li><code>GET /api/products</code> - List all products</li>
+                    <li><code>POST /api/products</code> - Create product</li>
+                    <li><code>PUT /api/products/:id</code> - Update product</li>
+                    <li><code>DELETE /api/products/:id</code> - Delete product</li>
+                    <li><code>POST /api/orders</code> - Create order</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h3>Example CORS Configuration (Node.js/Express):</h3>
+        <pre><code>const cors = require('cors');
+
+app.use(cors({
+    origin: [
+        'http://localhost:3000',
+        'http://127.0.0.1:5500',
+        'http://localhost:5500',
+        'file://'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));</code></pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Common Issues & Solutions</h2>
+        <ul>
+            <li><strong>CORS Error:</strong> Backend needs to allow requests from your domain</li>
+            <li><strong>404 Error:</strong> API endpoints don't match your backend routes</li>
+            <li><strong>Network Error:</strong> Backend URL is incorrect or server is down</li>
+            <li><strong>Auth Error:</strong> Authentication headers missing or invalid</li>
+        </ul>
+        
+        <h3>Quick Fixes:</h3>
+        <button class="test-button" onclick="checkBackendStatus()">Check Backend Status</button>
+        <button class="test-button" onclick="testDifferentEndpoints()">Test Different Endpoints</button>
+        <div id="quick-fixes-results" class="result info">Click a button to test...</div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // Display configuration
+        document.getElementById('backend-url').textContent = CONFIG.API_BASE_URL;
+        document.getElementById('products-endpoint').textContent = CONFIG.ENDPOINTS.products;
+        document.getElementById('orders-endpoint').textContent = CONFIG.ENDPOINTS.orders;
+
+        function logResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n\n`;
+            
+            element.textContent += logEntry;
+            element.className = `result ${type}`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        async function testBasicConnection() {
+            logResult('basic-results', '🔍 Testing basic connection...', 'info');
+            
+            try {
+                logResult('basic-results', `📍 Attempting to connect to: ${CONFIG.API_BASE_URL}`, 'info');
+                
+                const response = await fetch(CONFIG.API_BASE_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                logResult('basic-results', `✅ Connection successful!\nStatus: ${response.status}\nURL: ${response.url}`, 'success');
+            } catch (error) {
+                logResult('basic-results', `❌ Connection failed: ${error.message}`, 'error');
+                logResult('basic-results', `🔍 Error type: ${error.name}`, 'error');
+                logResult('basic-results', `💡 This is likely a CORS issue or the backend is not accessible`, 'error');
+                
+                // Try alternative approaches
+                logResult('basic-results', '🔄 Trying alternative connection methods...', 'info');
+                await testAlternativeConnections();
+            }
+        }
+
+        async function testAlternativeConnections() {
+            // Test 1: Try without CORS mode
+            try {
+                logResult('basic-results', '🔄 Testing without CORS mode...', 'info');
+                const response = await fetch(CONFIG.API_BASE_URL, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+                logResult('basic-results', `📡 No-CORS response status: ${response.status}`, 'info');
+            } catch (error) {
+                logResult('basic-results', `❌ No-CORS also failed: ${error.message}`, 'error');
+            }
+
+            // Test 2: Try with different protocols
+            const urls = [
+                CONFIG.API_BASE_URL.replace('https://', 'http://'),
+                CONFIG.API_BASE_URL + '/',
+                CONFIG.API_BASE_URL + '/api',
+                CONFIG.API_BASE_URL + '/health'
+            ];
+
+            for (const url of urls) {
+                try {
+                    logResult('basic-results', `🔄 Testing URL: ${url}`, 'info');
+                    const response = await fetch(url, { method: 'GET' });
+                    logResult('basic-results', `✅ URL ${url} responded with status: ${response.status}`, 'success');
+                    break;
+                } catch (error) {
+                    logResult('basic-results', `❌ URL ${url} failed: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        async function testProductsEndpoint() {
+            logResult('basic-results', '🔍 Testing products endpoint...', 'info');
+            
+            try {
+                logResult('basic-results', `📍 Testing URL: ${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.products}`, 'info');
+                
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.products}`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                logResult('basic-results', `📡 Products endpoint response:\nStatus: ${response.status}\nHeaders: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`, 'info');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logResult('basic-results', `✅ Products data: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    logResult('basic-results', `❌ Error response: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                logResult('basic-results', `❌ Products endpoint failed: ${error.message}`, 'error');
+                logResult('basic-results', `🔍 Error details: ${error.name} - ${error.stack}`, 'error');
+                
+                // Try to diagnose the issue
+                await diagnoseConnectionIssue();
+            }
+        }
+
+        async function diagnoseConnectionIssue() {
+            logResult('basic-results', '🔍 Diagnosing connection issue...', 'info');
+            
+            // Test 1: Check if backend is reachable
+            try {
+                logResult('basic-results', '🔄 Test 1: Checking if backend is reachable...', 'info');
+                const response = await fetch(CONFIG.API_BASE_URL, {
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                });
+                logResult('basic-results', '✅ Backend is reachable', 'success');
+            } catch (error) {
+                logResult('basic-results', `❌ Backend is not reachable: ${error.message}`, 'error');
+                logResult('basic-results', '💡 This suggests the backend URL is wrong or the server is down', 'error');
+                return;
+            }
+            
+            // Test 2: Check CORS
+            try {
+                logResult('basic-results', '🔄 Test 2: Checking CORS configuration...', 'info');
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.products}`, {
+                    method: 'OPTIONS'
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
+                };
+                
+                if (corsHeaders['Access-Control-Allow-Origin']) {
+                    logResult('basic-results', `✅ CORS is configured: ${JSON.stringify(corsHeaders, null, 2)}`, 'success');
+                } else {
+                    logResult('basic-results', `❌ CORS is NOT configured properly`, 'error');
+                    logResult('basic-results', '💡 This is likely the main issue. Add CORS to your backend.', 'error');
+                }
+            } catch (error) {
+                logResult('basic-results', `❌ CORS test failed: ${error.message}`, 'error');
+            }
+            
+            // Test 3: Check if endpoint exists
+            try {
+                logResult('basic-results', '🔄 Test 3: Checking if endpoint exists...', 'info');
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.products}`, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+                logResult('basic-results', `📡 Endpoint response status: ${response.status}`, 'info');
+                
+                if (response.status === 404) {
+                    logResult('basic-results', '❌ Endpoint does not exist (404)', 'error');
+                    logResult('basic-results', '💡 Check your backend API routes', 'error');
+                } else if (response.status === 200) {
+                    logResult('basic-results', '✅ Endpoint exists and responds', 'success');
+                    logResult('basic-results', '💡 The issue is definitely CORS related', 'error');
+                }
+            } catch (error) {
+                logResult('basic-results', `❌ Endpoint test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testOrdersEndpoint() {
+            logResult('basic-results', '🔍 Testing orders endpoint...', 'info');
+            
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.orders}`);
+                logResult('basic-results', `📡 Orders endpoint response:\nStatus: ${response.status}`, 'info');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logResult('basic-results', `✅ Orders endpoint accessible`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    logResult('basic-results', `❌ Orders endpoint error: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                logResult('basic-results', `❌ Orders endpoint failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCORS() {
+            logResult('basic-results', '🔍 Testing CORS configuration...', 'info');
+            
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.products}`, {
+                    method: 'OPTIONS'
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
+                };
+                
+                logResult('basic-results', `📡 CORS Headers: ${JSON.stringify(corsHeaders, null, 2)}`, 'info');
+                
+                if (corsHeaders['Access-Control-Allow-Origin']) {
+                    logResult('basic-results', '✅ CORS appears to be configured', 'success');
+                } else {
+                    logResult('basic-results', '⚠️ CORS headers not found - this might cause issues', 'error');
+                }
+            } catch (error) {
+                logResult('basic-results', `❌ CORS test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSupabaseConnection() {
+            logResult('supabase-results', '🔍 Testing Supabase connection...', 'info');
+            
+            try {
+                // Test if the backend is using Supabase
+                const response = await fetch(`${CONFIG.API_BASE_URL}/api/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    logResult('supabase-results', `✅ Health check response: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    logResult('supabase-results', '⚠️ Health endpoint not available, trying products endpoint...', 'info');
+                    await testProductsEndpoint();
+                }
+            } catch (error) {
+                logResult('supabase-results', `❌ Supabase connection test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSupabaseAuth() {
+            logResult('supabase-results', '🔍 Testing Supabase authentication...', 'info');
+            
+            try {
+                // Test if auth endpoint exists
+                const response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ENDPOINTS.auth}`);
+                logResult('supabase-results', `📡 Auth endpoint status: ${response.status}`, 'info');
+                
+                if (response.ok) {
+                    logResult('supabase-results', '✅ Auth endpoint accessible', 'success');
+                } else {
+                    logResult('supabase-results', '⚠️ Auth endpoint not available or requires authentication', 'info');
+                }
+            } catch (error) {
+                logResult('supabase-results', `❌ Auth test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkBackendStatus() {
+            logResult('quick-fixes-results', '🔍 Checking backend status...', 'info');
+            
+            try {
+                // Try to ping the backend
+                const response = await fetch(CONFIG.API_BASE_URL, {
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                });
+                logResult('quick-fixes-results', '✅ Backend appears to be running', 'success');
+            } catch (error) {
+                logResult('quick-fixes-results', `❌ Backend might be down: ${error.message}`, 'error');
+                logResult('quick-fixes-results', '💡 Check if your Lovable backend is deployed and running', 'error');
+            }
+        }
+
+        async function testDifferentEndpoints() {
+            logResult('quick-fixes-results', '🔍 Testing different endpoint variations...', 'info');
+            
+            const endpointVariations = [
+                '/api/products',
+                '/products',
+                '/api/v1/products',
+                '/rest/v1/products',
+                '/api/items',
+                '/items'
+            ];
+            
+            for (const endpoint of endpointVariations) {
+                try {
+                    logResult('quick-fixes-results', `🔄 Testing: ${endpoint}`, 'info');
+                    const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`);
+                    
+                    if (response.ok) {
+                        logResult('quick-fixes-results', `✅ Found working endpoint: ${endpoint}`, 'success');
+                        const data = await response.json();
+                        logResult('quick-fixes-results', `📦 Data preview: ${JSON.stringify(data).substring(0, 200)}...`, 'success');
+                        break;
+                    } else {
+                        logResult('quick-fixes-results', `❌ ${endpoint} returned status: ${response.status}`, 'error');
+                    }
+                } catch (error) {
+                    logResult('quick-fixes-results', `❌ ${endpoint} failed: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Auto-run basic tests on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testBasicConnection();
+            }, 1000);
+        });
+    </script>
+</body>
+</html> 

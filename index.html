@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ElectroMart - Electronics Store</title>
+    <script src="config.js"></script>
     <style>
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #e3e8ee 100%);
@@ -484,7 +485,7 @@
 </head>
 <body>
     <header>
-        <button class="admin-btn" onclick="toggleAdmin()">لوحة الإدارة</button>
+        <!-- <button class="admin-btn" onclick="toggleAdmin()">لوحة الإدارة</button> -->
         <!-- Animated SVG Logo -->
         <svg class="logo-svg" viewBox="0 0 100 100" fill="none">
             <defs>
@@ -546,6 +547,10 @@
         <div class="admin-content">
             <button class="close-modal" onclick="toggleAdmin()">&times;</button>
             <h2>لوحة إدارة المنتجات</h2>
+            <div style="margin-bottom: 20px; padding: 10px; background: #f5f7fa; border-radius: 8px;">
+                <button type="button" onclick="testAPIConnection()" style="background: #0078d7; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; margin-right: 10px; cursor: pointer;">Test API Connection</button>
+                <button type="button" onclick="console.log('Current products:', products)" style="background: #28a745; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer;">Log Products</button>
+            </div>
             <form class="admin-form" id="admin-form" onsubmit="return saveProduct(event)">
                 <input type="hidden" id="admin-id">
                 <label>اسم المنتج</label>
@@ -581,7 +586,7 @@
                     <option value="debit">Debit Card</option>
                 </select>
                 <label>Shipping Method</label>
-                <select id="checkout-shipping" onchange="updateCheckoutTotal()" required>
+                <select id="checkout-shipping" onchange="updateCheckoutSummary()" required>
                     <option value="normal">Normal Shipping (Free)</option>
                     <option value="fast">Fast Shipping (+$3)</option>
                 </select>
@@ -593,265 +598,312 @@
             <div class="success-message" id="checkout-success" style="display:none;"></div>
         </div>
     </div>
-    <script>
-    // بيانات المنتجات
+   <script>
+    // =================================================================
+    // CONFIG AND GLOBAL STATE
+    // =================================================================
+    const API_BASE_URL = CONFIG.API_BASE_URL;
+    const API_ENDPOINTS = CONFIG.ENDPOINTS;
+    const SUPABASE_KEY = CONFIG.AUTH.apiKey;
+
     let products = [];
-    if (localStorage.getItem('products')) {
-        products = JSON.parse(localStorage.getItem('products'));
-    } else {
-        products = [
-            {
-                id: 1,
-                title: 'Laptop Pro 15"',
-                desc: 'Powerful performance for work and play. Sleek, lightweight design.',
-                price: 1299,
-                image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80',
-                details: 'Intel i7, 16GB RAM, 512GB SSD, 15.6" Retina Display, Thunderbolt 4, Backlit Keyboard.'
-            },
-            {
-                id: 2,
-                title: 'Mechanical Keyboard',
-                desc: 'RGB backlit keys, tactile switches, perfect for gaming and typing.',
-                price: 89,
-                image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80',
-                details: 'Blue switches, 104 keys, customizable RGB, USB-C, Aluminum body.'
-            },
-            {
-                id: 3,
-                title: 'Wireless Mouse',
-                desc: 'Ergonomic design, long battery life, ultra-fast response.',
-                price: 39,
-                image: 'https://images.unsplash.com/photo-1519241047957-be31d7379a5d?auto=format&fit=crop&w=400&q=80',
-                details: '2.4GHz wireless, 16000 DPI, 70h battery, 6 buttons, silent click.'
-            },
-            {
-                id: 4,
-                title: 'Gaming Headset',
-                desc: 'Immersive surround sound, noise-cancelling mic, RGB lighting.',
-                price: 59,
-                image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-                details: '7.1 surround, detachable mic, memory foam, USB/3.5mm, 16M RGB.'
-            },
-            {
-                id: 5,
-                title: '4K Monitor 27"',
-                desc: 'Ultra HD, 144Hz refresh, HDR, ultra-thin bezels.',
-                price: 399,
-                image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80',
-                details: '3840x2160, IPS, 1ms, HDMI/DP, VESA mount, Eye-care tech.'
-            },
-            {
-                id: 6,
-                title: 'USB-C Docking Station',
-                desc: 'Expand your laptop with HDMI, USB, Ethernet, SD card.',
-                price: 79,
-                image: 'https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=400&q=80',
-                details: '2x HDMI, 3x USB 3.0, Gigabit LAN, SD/TF, 100W PD charging.'
+    let cart = [];
+
+    // =================================================================
+    // API HELPER FUNCTIONS
+    // =================================================================
+    async function apiRequest(endpoint, options = {}) {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            ...options.headers
+        };
+        const config = { ...options, headers };
+
+        if (CONFIG.DEBUG.enabled && CONFIG.DEBUG.logRequests) {
+            console.log('🌐 API Request:', { url, method: config.method || 'GET' });
+        }
+
+        try {
+            const response = await fetch(url, config);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
             }
-        ];
+            if (response.status === 204) return null;
+            
+            const data = await response.json();
+            if (CONFIG.DEBUG.enabled && CONFIG.DEBUG.logResponses) {
+                console.log('✅ API Success Response:', data);
+            }
+            return data;
+        } catch (error) {
+            console.error('❌ API request failed:', { url, error: error.message });
+            throw error;
+        }
     }
-    // رسم المنتجات
-    const productsList = document.getElementById('products-list');
+
+    // =================================================================
+    // PRODUCT API FUNCTIONS (CRUD)
+    // =================================================================
+    function fetchProducts() {
+        return apiRequest(`${API_ENDPOINTS.products}?select=*&order=id.asc`);
+    }
+
+    function createProduct(productData) {
+        return apiRequest(API_ENDPOINTS.products, {
+            method: 'POST',
+            headers: { 'Prefer': 'return=representation' }, 
+            body: JSON.stringify(productData)
+        });
+    }
+
+    function updateProduct(productId, productData) {
+        return apiRequest(`${API_ENDPOINTS.products}?id=eq.${productId}`, {
+            method: 'PATCH',
+            headers: { 'Prefer': 'return=representation' },
+            body: JSON.stringify(productData)
+        });
+    }
+
+    function deleteProduct(productId) {
+        return apiRequest(`${API_ENDPOINTS.products}?id=eq.${productId}`, {
+            method: 'DELETE'
+        });
+    }
+    
+    function createOrder(orderData) {
+        return apiRequest(API_ENDPOINTS.orders, {
+            method: 'POST',
+            headers: { 'Prefer': 'return=representation' },
+            body: JSON.stringify(orderData)
+        });
+    }
+
+    // =================================================================
+    // UI RENDERING AND INITIALIZATION
+    // =================================================================
+    async function initializeProducts() {
+        console.log('🚀 Initializing products from Supabase...');
+        try {
+            products = await fetchProducts();
+            console.log('✅ Products loaded from API:', products.length, 'items');
+            renderProducts();
+            renderAdminProducts();
+        } catch (error) {
+            console.error('❌ Failed to load products from API.', error);
+            document.getElementById('products-list').innerHTML = '<p style="color:red; text-align:center;">Could not load products.</p>';
+        }
+    }
+    
     function renderProducts() {
+        const productsList = document.getElementById('products-list');
         productsList.innerHTML = '';
         products.forEach(product => {
             const card = document.createElement('div');
             card.className = 'product-card';
+            // All onclick handlers now correctly wrap the string ID in quotes
             card.innerHTML = `
                 <img class="product-img" src="${product.image}" alt="${product.title}">
                 <div class="product-title">${product.title}</div>
-                <div class="product-desc">${product.desc}</div>
+                <div class="product-desc">${product.description}</div>
                 <div class="product-price">$${product.price}</div>
-                <button class="buy-btn" onclick="addToCart(${product.id});event.stopPropagation();">Buy Now</button>
+                <button class="buy-btn" onclick="showDetails(product.id);event.stopPropagation();">Buy Now</button>
             `;
             card.onclick = () => showDetails(product.id);
             productsList.appendChild(card);
         });
     }
-    renderProducts();
 
-    // سلة المشتريات
-    let cart = [];
+    // =================================================================
+    // CART LOGIC (CORRECTED & DE-DUPLICATED)
+    // =================================================================
     function addToCart(id) {
-        const idx = cart.findIndex(item => item.id === id);
-        if(idx > -1) {
+        console.log(`🛒 addToCart called with id: ${id}`);
+        if (typeof id !== 'string' || id.length === 0) {
+            console.error("Invalid product ID passed to addToCart:", id);
+            return;
+        }
+
+        const idx = cart.findIndex(item => item.id === id); // String comparison
+        if (idx > -1) {
             cart[idx].qty++;
         } else {
-            cart.push({id, qty: 1});
+            cart.push({ id: id, qty: 1 });
         }
         updateCartCount();
     }
+
     function updateCartCount() {
-        document.getElementById('cart-count').textContent = cart.reduce((a,b)=>a+b.qty,0);
+        const cartCountElement = document.getElementById('cart-count');
+        if (!cartCountElement) return;
+        cartCountElement.textContent = cart.reduce((total, item) => total + item.qty, 0);
     }
+    
+    function changeQty(id, delta) {
+        const idx = cart.findIndex(item => item.id === id); // String comparison
+        if (idx > -1) {
+            cart[idx].qty += delta;
+            if (cart[idx].qty <= 0) {
+                cart.splice(idx, 1);
+            }
+            updateCartCount();
+            openCart(); // Refresh cart view
+        }
+    }
+
+    function removeFromCart(id) {
+        cart = cart.filter(item => item.id !== id); // String comparison
+        updateCartCount();
+        openCart(); // Refresh cart view
+    }
+
     function openCart() {
         const modal = document.getElementById('cart-modal');
         const itemsDiv = document.getElementById('cart-items');
         itemsDiv.innerHTML = '';
         let total = 0;
-        if(cart.length === 0) {
+
+        if (cart.length === 0) {
             itemsDiv.innerHTML = '<div style="color:#888;">Cart is empty.</div>';
         } else {
-            cart.forEach(item => {
-                const prod = products.find(p=>p.id===item.id);
-                total += prod.price * item.qty;
-                itemsDiv.innerHTML += `
-                <div class="cart-item">
-                    <img src="${prod.image}" alt="${prod.title}">
-                    <span class="cart-item-title">${prod.title}</span>
-                    <button onclick="changeQty(${item.id},-1);event.stopPropagation();">-</button>
-                    <span class="cart-item-qty">${item.qty}</span>
-                    <button onclick="changeQty(${item.id},1);event.stopPropagation();">+</button>
-                    <button class="cart-item-remove" onclick="removeFromCart(${item.id});event.stopPropagation();">&times;</button>
-                </div>`;
+            cart.forEach(cartItem => {
+                const productDetails = products.find(p => p.id === cartItem.id);
+                if (productDetails) {
+                    total += productDetails.price * cartItem.qty;
+                    itemsDiv.innerHTML += `
+                    <div class="cart-item">
+                        <img src="${productDetails.image}" alt="${productDetails.title}">
+                        <span class="cart-item-title">${productDetails.title}</span>
+                        <button onclick="changeQty('${cartItem.id}',-1);event.stopPropagation();">-</button>
+                        <span class="cart-item-qty">${cartItem.qty}</span>
+                        <button onclick="changeQty('${cartItem.id}',1);event.stopPropagation();">+</button>
+                        <button class="cart-item-remove" onclick="removeFromCart('${cartItem.id}');event.stopPropagation();">&times;</button>
+                    </div>`;
+                }
             });
-            itemsDiv.innerHTML += `<div style="margin-top:18px;text-align:right;"><button onclick="openCheckout()" style="background:#0078d7;color:#fff;border:none;border-radius:7px;padding:10px 28px;font-size:1.05rem;font-weight:600;cursor:pointer;">Checkout</button></div>`;
+            if (total > 0) {
+                itemsDiv.innerHTML += `<div style="margin-top:18px;text-align:right;"><button onclick="openCheckout()" style="background:#0078d7;color:#fff;border:none;border-radius:7px;padding:10px 28px;font-size:1.05rem;font-weight:600;cursor:pointer;">Checkout</button></div>`;
+            }
         }
-        document.getElementById('cart-total').textContent = cart.length ? `Total: $${total}` : '';
+        document.getElementById('cart-total').textContent = cart.length ? `Total: $${total.toFixed(2)}` : '';
         modal.style.display = 'flex';
     }
+
     function closeCart() {
         document.getElementById('cart-modal').style.display = 'none';
     }
-    function changeQty(id, delta) {
-        const idx = cart.findIndex(item => item.id === id);
-        if(idx > -1) {
-            cart[idx].qty += delta;
-            if(cart[idx].qty <= 0) cart.splice(idx,1);
-            updateCartCount();
-            openCart();
-        }
-    }
-    function removeFromCart(id) {
-        cart = cart.filter(item => item.id !== id);
-        updateCartCount();
-        openCart();
-    }
-    // تفاصيل المنتج
+
+    // =================================================================
+    // MODALS (DETAILS, ADMIN, CHECKOUT)
+    // =================================================================
     function showDetails(id) {
-        const prod = products.find(p=>p.id===id);
+        const prod = products.find(p => p.id === id);
+        if (!prod) return;
         const modal = document.getElementById('details-modal');
         const content = document.getElementById('details-content');
+        const detailsText = prod.details || prod.description;
+        // ** THE CRITICAL FIX IS HERE **: onclick="addToCart('${prod.id}')" now has quotes.
         content.innerHTML = `
             <button class="close-modal" onclick="closeDetails()">&times;</button>
             <img class="details-img" src="${prod.image}" alt="${prod.title}">
             <div class="details-title">${prod.title}</div>
-            <div class="details-desc">${prod.details}</div>
+            <div class="details-desc">${detailsText}</div>
             <div class="details-price">$${prod.price}</div>
-            <button class="details-buy-btn" onclick="addToCart(${prod.id});closeDetails();">Add to Cart</button>
+            <button class="details-buy-btn" onclick="addToCart('${prod.id}');closeDetails();">Add to Cart</button>
         `;
         modal.style.display = 'flex';
     }
+
     function closeDetails() {
         document.getElementById('details-modal').style.display = 'none';
     }
-    // إغلاق النوافذ عند الضغط خارجها
-    window.onclick = function(e) {
-        if(e.target.id==='cart-modal') closeCart();
-        if(e.target.id==='details-modal') closeDetails();
-        if(e.target.id==='admin-modal') toggleAdmin(); // Close admin modal on outside click
-        if(e.target.id==='checkout-modal') closeCheckout(); // Close checkout modal on outside click
-    }
 
-    // لوحة الإدارة
     function toggleAdmin() {
         const modal = document.getElementById('admin-modal');
-        if(modal.style.display==='flex') {
-            modal.style.display = 'none';
-            resetAdminForm();
-        } else {
+        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        if (modal.style.display === 'flex') {
             renderAdminProducts();
-            modal.style.display = 'flex';
         }
     }
+
     function renderAdminProducts() {
         const list = document.getElementById('admin-products-list');
         list.innerHTML = '';
         products.forEach(prod => {
             list.innerHTML += `
-                <div class="admin-product-row">
-                    <img src="${prod.image}" alt="img">
-                    <span class="admin-product-title">${prod.title}</span>
-                    <div class="admin-product-actions">
-                        <button class="edit" onclick="editProduct(${prod.id})">تعديل</button>
-                        <button class="delete" onclick="deleteProduct(${prod.id})">حذف</button>
-                    </div>
+            <div class="admin-product-row">
+                <img src="${prod.image}" alt="img">
+                <span class="admin-product-title">${prod.title}</span>
+                <div class="admin-product-actions">
+                    <button class="edit" onclick="editProduct('${prod.id}')">تعديل</button>
+                    <button class="delete" onclick="confirmDelete('${prod.id}')">حذف</button>
                 </div>
-            `;
+            </div>`;
         });
     }
-    function saveProduct(e) {
+
+    async function saveProduct(e) {
         e.preventDefault();
         const id = document.getElementById('admin-id').value;
-        const title = document.getElementById('admin-title').value;
-        const desc = document.getElementById('admin-desc').value;
-        const price = parseFloat(document.getElementById('admin-price').value);
-        const image = document.getElementById('admin-image').value;
-        const details = document.getElementById('admin-details').value;
-        if(id) {
-            // تعديل
-            const idx = products.findIndex(p=>p.id==id);
-            if(idx>-1) {
-                products[idx] = {id: +id, title, desc, price, image, details};
+        const productData = {
+            title: document.getElementById('admin-title').value,
+            description: document.getElementById('admin-desc').value,
+            price: parseFloat(document.getElementById('admin-price').value),
+            image: document.getElementById('admin-image').value,
+            category: 'Electronics',
+            details: document.getElementById('admin-details').value
+        };
+
+        try {
+            if (id) {
+                await updateProduct(id, productData);
+            } else {
+                await createProduct(productData);
             }
-        } else {
-            // إضافة
-            const newId = products.length ? Math.max(...products.map(p=>p.id))+1 : 1;
-            products.push({id: newId, title, desc, price, image, details});
+            await initializeProducts();
+            resetAdminForm();
+        } catch (error) {
+            alert('Failed to save product. Check console for details.');
         }
-        renderProducts();
-        renderAdminProducts();
-        resetAdminForm();
-        saveProductsToStorage(); // Save to localStorage
     }
+
     function editProduct(id) {
-        const prod = products.find(p=>p.id===id);
-        if(!prod) return;
+        const prod = products.find(p => p.id === id); // String comparison
+        if (!prod) return;
         document.getElementById('admin-id').value = prod.id;
         document.getElementById('admin-title').value = prod.title;
-        document.getElementById('admin-desc').value = prod.desc;
+        document.getElementById('admin-desc').value = prod.description;
         document.getElementById('admin-price').value = prod.price;
         document.getElementById('admin-image').value = prod.image;
-        document.getElementById('admin-details').value = prod.details;
+        document.getElementById('admin-details').value = prod.details || prod.description;
         document.getElementById('admin-save-btn').textContent = 'حفظ التعديلات';
     }
-    function deleteProduct(id) {
-        const idx = products.findIndex(p=>p.id===id);
-        if(idx>-1) {
-            products.splice(idx,1);
-            renderProducts();
-            renderAdminProducts();
+
+    async function confirmDelete(id) {
+        if (!confirm('Are you sure you want to delete this product?')) return;
+        try {
+            await deleteProduct(id); // Pass string ID directly
+            await initializeProducts();
+        } catch (error) {
+            alert('Failed to delete product. Check console for details.');
         }
-        saveProductsToStorage(); // Save to localStorage
     }
+    
     function resetAdminForm() {
+        document.getElementById('admin-form').reset();
         document.getElementById('admin-id').value = '';
-        document.getElementById('admin-title').value = '';
-        document.getElementById('admin-desc').value = '';
-        document.getElementById('admin-price').value = '';
-        document.getElementById('admin-image').value = '';
-        document.getElementById('admin-details').value = '';
         document.getElementById('admin-save-btn').textContent = 'إضافة المنتج';
     }
-    function saveProductsToStorage() {
-        localStorage.setItem('products', JSON.stringify(products));
-    }
-    function loadProductsFromStorage() {
-        if (localStorage.getItem('products')) {
-            products = JSON.parse(localStorage.getItem('products'));
-        }
-    }
-    loadProductsFromStorage(); // Load products from localStorage on page load
-
-    // نافذة الدفع
+    
     function openCheckout() {
-        document.getElementById('cart-modal').style.display = 'none';
-        document.getElementById('checkout-success').style.display = 'none';
-        document.getElementById('checkout-form').reset();
-        document.getElementById('checkout-shipping').value = 'normal';
-        updateCheckoutSummary();
-        document.getElementById('checkout-modal').style.display = 'flex';
-    }
+    document.getElementById('checkout-modal').style.display = 'flex';
+    updateCheckoutSummary();
+}
+
+
     function closeCheckout() {
         document.getElementById('checkout-modal').style.display = 'none';
     }
@@ -864,51 +916,96 @@
             summary += '<b>Order Summary:</b><ul style="margin:8px 0 8px 18px;padding:0;">';
             cart.forEach(item => {
                 const prod = products.find(p=>p.id===item.id);
+                if (!prod) return;
                 total += prod.price * item.qty;
-                summary += `<li>${prod.title} x ${item.qty} = $${prod.price * item.qty}</li>`;
+                summary += `<li>${prod.title} x ${item.qty} = $${(prod.price * item.qty).toFixed(2)}</li>`;
             });
             summary += '</ul>';
         }
         // Shipping
         const shipping = document.getElementById('checkout-shipping').value;
         if(shipping === 'fast') {
-            summary += '<div>Fast Shipping: <b>$3</b></div>';
+            summary += '<div>Fast Shipping: <b>$3.00</b></div>';
             total += 3;
         } else {
             summary += '<div>Normal Shipping: <b>Free</b></div>';
         }
-        summary += `<div style="margin-top:8px;">Total: <b>$${total}</b></div>`;
+        summary += `<div style="margin-top:8px;">Total: <b>$${total.toFixed(2)}</b></div>`;
         document.getElementById('checkout-summary').innerHTML = summary;
+
+        console.log(`Shipping: ${shipping}, Total with shipping: $${total.toFixed(2)}`);
+
     }
     function updateCheckoutTotal() {
         updateCheckoutSummary();
     }
-    function confirmCheckout(e) {
-        e.preventDefault();
-        // Get data
-        const name = document.getElementById('checkout-name').value;
-        const address = document.getElementById('checkout-address').value;
-        const payment = document.getElementById('checkout-payment').value;
-        const shipping = document.getElementById('checkout-shipping').value;
-        let total = cart.reduce((sum, item) => {
-            const prod = products.find(p=>p.id===item.id);
-            return sum + prod.price * item.qty;
-        }, 0);
-        if(shipping === 'fast') total += 3;
-        // Show confirmation
+    async function confirmCheckout(e) {
+    e.preventDefault();
+
+    // Gather data from the form and cart
+    const name = document.getElementById('checkout-name').value;
+    const address = document.getElementById('checkout-address').value;
+    const payment = document.getElementById('checkout-payment').value;
+    const shipping = document.getElementById('checkout-shipping').value;
+
+    // Prepare order items array
+    const items = cart.map(item => {
+        const prod = products.find(p => p.id === item.id);
+        return {
+            product_id: item.id,
+            title: prod ? prod.title : '',
+            price: prod ? prod.price : 0,
+            quantity: item.qty
+        };
+    });
+
+    let total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    if(shipping === 'fast') total += 3;
+
+    // Prepare order data
+    const orderData = {
+        customer_name: name,
+        address: address,
+        payment_method: payment,
+        shipping_method: shipping,
+        total: total,
+        items: items, // Store as JSON
+        product_name: items.length === 1 ? items[0].title : 'Multiple Items'
+    };
+
+    // Actually save to DB
+    try {
+        await createOrder(orderData); // <-- This saves order in Supabase
         document.getElementById('checkout-success').innerHTML =
             `Thank you, <b>${name}</b>!<br>Your order has been placed.<br><br><b>Address:</b> ${address}<br><b>Payment:</b> ${payment === 'cash' ? 'Cash' : 'Debit Card'}<br><b>Shipping:</b> ${shipping === 'fast' ? 'Fast ($3)' : 'Normal (Free)'}<br><b>Total:</b> $${total}`;
         document.getElementById('checkout-success').style.display = 'block';
-        // Clear cart
         cart = [];
         updateCartCount();
         setTimeout(()=>{
             closeCheckout();
         }, 3500);
-        return false;
+    } catch (err) {
+        alert('Sorry, there was a problem placing your order. Please try again.');
+        console.error(err);
     }
+    return false;
+}
+
     // عند فتح نافذة الدفع، حدث ملخص الطلب
     document.getElementById('checkout-shipping').addEventListener('change', updateCheckoutSummary);
-    </script>
+
+    // =================================================================
+    // EVENT LISTENERS
+    // =================================================================
+    window.onclick = function(e) {
+        if (e.target.id === 'cart-modal') closeCart();
+        if (e.target.id === 'details-modal') closeDetails();
+        if (e.target.id === 'admin-modal') toggleAdmin();
+        if (e.target.id === 'checkout-modal') closeCheckout();
+    }
+
+    document.addEventListener('DOMContentLoaded', initializeProducts);
+</script>
+
 </body>
 </html>
